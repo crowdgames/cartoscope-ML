@@ -12,15 +12,6 @@ from random import random
 
 IMG_DIR = "base_imgs"
 IMG_SAVE_DIR = "sorted_imgs"
-TRANSFORMS = {
-        "identity":   lambda im: im,
-        "rot90":      lambda im: im.transpose(Image.ROTATE_90),
-        "rot180":     lambda im: im.transpose(Image.ROTATE_180),
-        "rot270":     lambda im: im.transpose(Image.ROTATE_270),
-        "flip":       lambda im: im.transpose(Image.FLIP_LEFT_RIGHT),
-        "rot90flip":  lambda im: im.transpose(Image.ROTATE_90).transpose(Image.FLIP_LEFT_RIGHT),
-        "rot180flip": lambda im: im.transpose(Image.ROTATE_180).transpose(Image.FLIP_LEFT_RIGHT),
-        "rot270flip": lambda im: im.transpose(Image.ROTATE_270).transpose(Image.FLIP_LEFT_RIGHT)}
 
 OPPOSITE_ANSWER = {
         "Farming":           "No Farming",
@@ -37,21 +28,24 @@ for key, val in list(OPPOSITE_ANSWER.items()):
 ##
 
 def handle_row(row):
-    print(row.name)
-    experts_say_yes = row["expert_percentage"] > 0.65
-    experts_say_no  = row["expert_percentage"] < 0.35
-    if not (experts_say_yes or experts_say_no): return
-    with Image.open(f"{IMG_DIR}/{row['image']}.jpg") as im:
-        for transform_name, transform in TRANSFORMS.items():
-            training_or_validation = "val" if random() < 0.2 else "train"
-            expert_answer  = None
-            if experts_say_yes:
-                expert_answer = row['majority_answer']
-            elif experts_say_no:
-                expert_answer = OPPOSITE_ANSWER[row['majority_answer']]
-            else:
-                raise Exception
-            transform(im).save(f"{IMG_SAVE_DIR}/{training_or_validation}/{expert_answer}/{row['image']}_{transform_name}.jpg")
+    experts_agree    = row["expert_percentage"] > 0.65
+    experts_disagree = row["expert_percentage"] < 0.35
+    if not (experts_agree or experts_disagree): return
+    # img bucket
+    image_bucket = None
+    bucket_rand = random()
+    if bucket_rand < 0.2:
+        image_bucket = "test"
+    elif bucket_rand < 0.4:
+        image_bucket = "val"
+    else:
+        image_bucket = "train"
+    project = row['majority_answer'] if row['pattern_identified'] else OPPOSITE_ANSWER[row['majority_answer']]
+    expert_pattern_identified = row['pattern_identified'] if experts_agree else 1 - row['pattern_identified']
+    expert_answer = "yes" if expert_pattern_identified else "no"
+    src  = f"{IMG_DIR}/{row['image']}.jpg"
+    dest = f"{IMG_SAVE_DIR}/{project}/{image_bucket}/{expert_answer}/{row['image']}.jpg"
+    shutil.copy(src, dest)
 
 votes = pd.read_csv("all_votes.csv")
 
