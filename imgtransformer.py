@@ -11,7 +11,7 @@ from random import random
 ## Constants
 
 IMG_DIR = "base_imgs"
-IMG_SAVE_DIR = "sorted_imgs"
+IMG_SAVE_DIR = "expert_rated_imgs"
 
 OPPOSITE_ANSWER = {
         "Farming":           "No Farming",
@@ -27,7 +27,11 @@ for key, val in list(OPPOSITE_ANSWER.items()):
 
 ##
 
-def handle_row(row):
+votes = pd.read_csv("all_votes.csv")
+
+##
+
+def split_by_experts(row):
     experts_agree    = row["expert_percentage"] > 0.65
     experts_disagree = row["expert_percentage"] < 0.35
     if not (experts_agree or experts_disagree): return
@@ -47,6 +51,27 @@ def handle_row(row):
     dest = f"{IMG_SAVE_DIR}/{project}/{image_bucket}/{expert_answer}/{row['image']}.jpg"
     shutil.copy(src, dest)
 
-votes = pd.read_csv("all_votes.csv")
+##
 
-votes.apply(handle_row, axis=1)
+votes.apply(split_by_experts, axis=1)
+
+##
+
+def get_row_for_proj_img(project, img_name):
+    of_image   = votes["image"] == img_name
+    of_project = votes["majority_answer"].isin((project, OPPOSITE_ANSWER[project]))
+    return votes[of_image & of_project]
+
+##
+
+for project in tqdm(filter(lambda s: s[0] != 'N', OPPOSITE_ANSWER.keys())):
+    for img_bucket in ["train", "val"]:
+        for expert_yes_no in ["yes", "no"]:
+            for img_full_name in os.listdir(f"./expert_rated_imgs/{project}/{img_bucket}/{expert_yes_no}"):
+                img_name    = img_full_name[:-4]
+                row         = get_row_for_proj_img(project, img_name)
+                assert len(row) == 1
+                user_answer = "yes" if row["majority_answer"].iloc[0] == project else "no"
+                src         = f"./expert_rated_imgs/{project}/{img_bucket}/{expert_yes_no}/{img_full_name}"
+                dest        = f"./user_rated_imgs/{project}/{img_bucket}/{user_answer}/{img_full_name}"
+                shutil.copy(src, dest)
